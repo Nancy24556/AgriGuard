@@ -1,6 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-// La liste globale des activités qui va s'actualiser en temps réel
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+
+// ==========================================
+// CONFIGURATIONS ET NOTIFIERS GLOBAUX
+// ==========================================
+
 final ValueNotifier<List<Map<String, dynamic>>> listeActivitesNotifier = ValueNotifier([
   {
     "date": "Hier - 07:00",
@@ -25,6 +32,40 @@ final ValueNotifier<List<Map<String, dynamic>>> listeActivitesNotifier = ValueNo
   },
 ]);
 
+final ValueNotifier<ResultatAnalyseIA> diagnosticIANotifier = ValueNotifier(
+  ResultatAnalyseIA(
+    maladie: "Sain",
+    confiance: 100.0,
+    estMalade: false,
+  ),
+);
+
+class SensorData {
+  final double humiditeSol;
+  final double reservoirEau;
+  final double temperatureAir;
+  final bool enLigne;
+
+  SensorData({
+    required this.humiditeSol,
+    required this.reservoirEau,
+    required this.temperatureAir,
+    required this.enLigne,
+  });
+}
+
+class ResultatAnalyseIA {
+  final String maladie;
+  final double confiance;
+  final bool estMalade;
+
+  ResultatAnalyseIA({
+    required this.maladie,
+    required this.confiance,
+    required this.estMalade,
+  });
+}
+
 void main() {
   runApp(const MyApp());
 }
@@ -35,31 +76,108 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      debugShowCheckedModeBanner: false, // Enlève la bande "Debug" en haut à droite
-      home: AgriSmartLogin(),
+      debugShowCheckedModeBanner: false,
+      home: AgriSmartSplashScreen(),
     );
   }
 }
 
-class AgriSmartLogin extends StatelessWidget {
-  const AgriSmartLogin({super.key});
+// ==========================================
+// 1. ÉCRAN DE BIENVENUE / SPLASH
+// ==========================================
+class AgriSmartSplashScreen extends StatelessWidget {
+  const AgriSmartSplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF135800), // Ton vert foncé de fond
+      backgroundColor: const Color(0xFF135800),
+      body: Center(
+        child: GestureDetector(
+          onTap: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const AgriSmartLogin()),
+            );
+          },
+          child: const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'AgriGUARD',
+                style: TextStyle(
+                  fontSize: 50,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  fontStyle: FontStyle.italic,
+                  letterSpacing: 2,
+                ),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Surveillance Intelligente & Connectée',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              SizedBox(height: 50),
+              Icon(Icons.touch_app, color: Colors.white38, size: 30),
+              Text('Appuyez pour commencer', style: TextStyle(color: Colors.white38, fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 2. ÉCRAN DE CONNEXION
+// ==========================================
+class AgriSmartLogin extends StatefulWidget {
+  const AgriSmartLogin({super.key});
+
+  @override
+  State<AgriSmartLogin> createState() => _AgriSmartLoginState();
+}
+
+class _AgriSmartLoginState extends State<AgriSmartLogin> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _tenterConnexion() {
+    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Veuillez remplir l'email et le mot de passe !"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF135800),
       body: SafeArea(
-        // Évite que le contenu touche l'encoche de la caméra
         child: SingleChildScrollView(
-          // Permet de scroller si le clavier s'ouvre
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 40),
-
-                // 1. LE TITRE PRINCIPAL (Image 2)
                 const Text(
                   'AgriGUARD',
                   style: TextStyle(
@@ -72,55 +190,42 @@ class AgriSmartLogin extends StatelessWidget {
                 const SizedBox(height: 8),
                 const Text(
                   'Se connecter',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(fontSize: 18, color: Colors.white),
                 ),
                 const SizedBox(height: 30),
 
-                // 2. LE BLOC BLANC/CRÈME (Formulaire)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFFDEE), // Ta couleur crème
-                    borderRadius: BorderRadius.circular(20), // Bords arrondis
+                    color: const Color(0xFFFFFDEE),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Champ Email
                       const Text(
                         "EMAIL / NOM D'UTILISATEUR",
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black54),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54),
                       ),
-                      const TextField(
-                        decoration: InputDecoration(
+                      TextField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(
                           hintText: 'Entrer votre email',
-                          hintStyle:
-                              TextStyle(color: Colors.black26, fontSize: 14),
+                          hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
                           border: UnderlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 24),
-
-                      // Champ Mot de passe
                       const Text(
                         "MOTS DE PASSE",
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black54),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54),
                       ),
-                      const TextField(
-                        obscureText: true, // Cache le mot de passe (●●●●)
-                        decoration: InputDecoration(
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
                           hintText: 'Entrer votre mots de passe',
-                          hintStyle:
-                              TextStyle(color: Colors.black26, fontSize: 14),
+                          hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
                           border: UnderlineInputBorder(),
                         ),
                       ),
@@ -129,11 +234,10 @@ class AgriSmartLogin extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // 3. CASE À COCHER "RESTER CONNECTÉ"
                 Row(
                   children: [
                     Checkbox(
-                      value: true, // Coché par défaut pour le style
+                      value: true,
                       onChanged: (value) {},
                       activeColor: const Color(0xFF66BB46),
                     ),
@@ -145,32 +249,20 @@ class AgriSmartLogin extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
 
-                // 4. BOUTON "SE CONNECTER" (Vert vif)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF66BB46), // Vert clair
+                    backgroundColor: const Color(0xFF66BB46),
                     minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
-                  onPressed: () {
-  // Cette ligne magique change d'écran vers la carte !
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
-  );
-},
+                  onPressed: _tenterConnexion,
                   child: const Text(
                     'SE CONNECTER',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14),
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
                 const SizedBox(height: 25),
 
-                // 5. SÉPARATEUR "OU"
                 const Row(
                   children: [
                     Expanded(child: Divider(color: Colors.white38, indent: 20, endIndent: 10)),
@@ -180,17 +272,19 @@ class AgriSmartLogin extends StatelessWidget {
                 ),
                 const SizedBox(height: 25),
 
-                // 6. BOUTON GOOGLE
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF66BB46),
                     minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
-                  onPressed: () {},
-                  icon: const Icon(Icons.g_mobiledata,
-                      color: Colors.white, size: 30),
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.g_mobiledata, color: Colors.white, size: 30),
                   label: const Text(
                     'continuer avec google',
                     style: TextStyle(color: Colors.white, fontSize: 14),
@@ -198,20 +292,15 @@ class AgriSmartLogin extends StatelessWidget {
                 ),
                 const SizedBox(height: 30),
 
-                // 7. TEXTE DU BAS (Inscription)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Vous n'avez pas de compte ? ",
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    const Text("Vous n'avez pas de compte ? ", style: TextStyle(color: Colors.white60, fontSize: 12)),
                     TextButton(
                       onPressed: () {},
                       child: const Text(
                         "Créer-en un gratuitement !",
-                        style: TextStyle(
-                            color: Color(0xFF66BB46),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12),
+                        style: TextStyle(color: Color(0xFF66BB46), fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
                   ],
@@ -226,24 +315,99 @@ class AgriSmartLogin extends StatelessWidget {
 }
 
 
-
-
-
-
 // ==========================================
-// TRÈS IMPORTANT : TON DEUXIÈME ÉCRAN (IMAGE 3)
+// 3. TABLEAU DE BORD PRINCIPAL : CARTE (CORRIGÉ)
 // ==========================================
-class AgriSmartMapScreen extends StatelessWidget {
+class AgriSmartMapScreen extends StatefulWidget {
   const AgriSmartMapScreen({super.key});
+
+  @override
+  State<AgriSmartMapScreen> createState() => _AgriSmartMapScreenState();
+}
+
+class _AgriSmartMapScreenState extends State<AgriSmartMapScreen> {
+  GoogleMapController? _mapController;
+  
+  // Coordonnées par défaut (Ambodrabiby / Antananarivo)
+  LatLng _currentLatLng = const LatLng(-18.7994, 47.5614);
+  String _currentLocationName = "Recherche de la position...";
+  final double _currentTemperature = 25.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initRealTimeLocation();
+  }
+
+  Future<void> _initRealTimeLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    try {
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _currentLocationName = "GPS désactivé");
+        return;
+      }
+
+      permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() => _currentLocationName = "Permissions refusées");
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _currentLocationName = "Permissions bloquées");
+        return;
+      }
+
+      // Récupération de la position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high
+      );
+      
+      LatLng nouvellePosition = LatLng(position.latitude, position.longitude);
+
+      // Récupération du nom du lieu (Geocoding) avec sécurité
+      String nomLieu = "Antananarivo, Madagascar";
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+        if (placemarks.isNotEmpty) {
+          final pm = placemarks.first;
+          nomLieu = "${pm.locality ?? pm.name ?? 'Position actuelle'}";
+        }
+      } catch (_) {
+        // Sécurité si le service de géocodage web/simulateur échoue
+        nomLieu = "Position active";
+      }
+
+      if (mounted) {
+        setState(() {
+          _currentLatLng = nouvellePosition;
+          _currentLocationName = "📍 $nomLieu";
+        });
+
+        _mapController?.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: nouvellePosition, zoom: 16.5),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Erreur de localisation : $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF135800), // Fond vert foncé pour le haut
+      backgroundColor: const Color(0xFF135800),
       body: SafeArea(
         child: Column(
           children: [
-            // 1. BARRE DU HAUT (Titre AgriGUARD)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
               child: Row(
@@ -260,12 +424,11 @@ class AgriSmartMapScreen extends StatelessWidget {
                     'AgriGUARD',
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
-                  const SizedBox(width: 40), // Juste pour équilibrer l'espace
+                  const SizedBox(width: 40),
                 ],
               ),
             ),
 
-            // 2. LE CONTENEUR PRINCIPAL BLANC (Qui englobe tout le reste)
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -276,7 +439,6 @@ class AgriSmartMapScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     const SizedBox(height: 10),
-                    // Les Onglets : Parcelle / Carte / Activité
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Container(
@@ -289,31 +451,24 @@ class AgriSmartMapScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const AgriSmartActivityScreen()),
-                            );
-                          },
-                          child: _buildTabButton("activité", isActive: false),
-                        ),
+                              onTap: () {
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AgriSmartActivityScreen()));
+                              },
+                              child: _buildTabButton("Activité", isActive: false),
+                            ),
                             _buildTabButton("Carte", isActive: true),
-                           GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AgriSmartActivityScreen()),
-                );
-              },
-              child: _buildTabButton("activité", isActive: false),
-            ),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AgriSmartParcelleScreen()));
+                              },
+                              child: _buildTabButton("Parcelle", isActive: false),
+                            ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 10),
 
-                    // 3. LA ZONE DE LA CARTE SATELLITE
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10.0),
@@ -321,48 +476,48 @@ class AgriSmartMapScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                           child: Stack(
                             children: [
-                              // En attendant d'installer Google Maps, on met une image ou une couleur
-                              // Une vraie image satellite récupérée sur le web pour le design !
-                            Container(
-                              width: double.infinity,
-                              height: double.infinity,
-                              child: // À la place de l'image, on pose le vrai composant Google Maps !
-                              GoogleMap(
-                                initialCameraPosition: const CameraPosition(
-                                  target: LatLng(-18.7994, 47.5614), // Coordonnées d'Ambodrabiby / Antananarivo !
-                                  zoom: 16.0, // Niveau de zoom pour bien voir les champs
+                              SizedBox(
+                                width: double.infinity,
+                                height: double.infinity,
+                                child: GoogleMap(
+                                  initialCameraPosition: CameraPosition(
+                                    target: _currentLatLng,
+                                    zoom: 16.0,
+                                  ),
+                                  mapType: MapType.satellite,
+                                  myLocationEnabled: true,
+                                  myLocationButtonEnabled: false,
+                                  zoomControlsEnabled: false,
+                                  onMapCreated: (GoogleMapController controller) {
+                                    _mapController = controller;
+                                  },
                                 ),
-                                mapType: MapType.satellite, // Mode SATELLITE comme sur tes maquettes !
-                                myLocationButtonEnabled: false,
-                                zoomControlsEnabled: false, // Cache les boutons + et - laids de Google
                               ),
-                            ),
 
-                              // Boite d'infos météo (Bienvenue dans AgriGUARD)
+                              // Boite météo - CORRIGÉE ICI
                               Positioned(
                                 top: 10,
                                 left: 10,
                                 right: 10,
                                 child: Container(
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withOpacity(0.95),
                                     borderRadius: BorderRadius.circular(15),
                                     border: Border.all(color: Colors.blue, width: 1.5),
                                   ),
-                                  child: const Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start, // Correction syntaxique appliquée !
                                     children: [
-                                      Text("Bienvenue dans AgriGUARD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                      SizedBox(height: 4),
-                                      Text("📍 Antananarivo, Ambodrabiby", style: TextStyle(fontSize: 10)),
-                                      Text("🌡️ Temperature Locale : 25°C", style: TextStyle(fontSize: 10)),
+                                      const Text("Bienvenue dans AgriGUARD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      const SizedBox(height: 4),
+                                      Text(_currentLocationName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                                      Text("Localisation active | 🌡️ Temp : ${_currentTemperature.toStringAsFixed(0)}°C", style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.w600)),
                                     ],
                                   ),
                                 ),
                               ),
 
-                              // Bouton "Nouvelle Parcelle" en bas de la carte
                               Positioned(
                                 bottom: 15,
                                 left: 50,
@@ -373,9 +528,7 @@ class AgriSmartMapScreen extends StatelessWidget {
                                     side: const BorderSide(color: Color(0xFF135800), width: 2),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
-                                  onPressed: () {
-  _ouvrirMenuNouvelleParcelle(context);
-},
+                                  onPressed: () => _ouvrirMenuNouvelleParcelle(context),
                                   child: const Text("Nouvelle Parcelle", style: TextStyle(color: Color(0xFF135800), fontWeight: FontWeight.bold)),
                                 ),
                               ),
@@ -386,28 +539,7 @@ class AgriSmartMapScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
 
-                    // 4. TA BARRE DE NAVIGATION EN BAS (Couleur Crème)
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      color: const Color(0xFFFFFDEE),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-children: [
-                _buildNavIcon(Icons.storage),
-                _buildNavIcon(Icons.cloud_queue),
-                _buildNavIcon(Icons.edit_note),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const AgriSmartProfileScreen()),
-                    );
-                  },
-                  child: _buildNavIcon(Icons.person_pin),
-                ),
-              ],
-                      ),
-                    ),
+                    _buildBottomNavigation(context, selectedIndex: 1),
                   ],
                 ),
               ),
@@ -418,7 +550,6 @@ children: [
     );
   }
 
-  // Petit outil pour créer les boutons d'onglets du haut
   Widget _buildTabButton(String text, {required bool isActive}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -436,192 +567,265 @@ children: [
       ),
     );
   }
+}
 
-  // Petit outil pour créer les icônes vertes du bas
-  Widget _buildNavIcon(IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: const BoxDecoration(
-        color: Color(0xFF135800),
-        shape: BoxShape.circle,
+
+
+
+// ==========================================
+// 4. LES CAPTEURS IOT DE LA PARCELLE
+// ==========================================
+class AgriSmartParcelleScreen extends StatelessWidget {
+  const AgriSmartParcelleScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+        );
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF135800),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+              );
+            },
+          ),
+          title: const Text("Données IoT Parcelle", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+        body: SafeArea(
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 15),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFFDEE),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            ),
+            child: StreamBuilder<SensorData>(
+              stream: obtenirFluxCapteursESP32(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF135800)));
+                }
+                
+                final data = snapshot.data ?? SensorData(humiditeSol: 0, reservoirEau: 0, temperatureAir: 0, enLigne: false);
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        data.enLigne ? "● SYSTÈME CONNECTÉ (ESP32)" : "○ SYSTÈME HORS LIGNE",
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: data.enLigne ? Colors.green : Colors.red),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(child: _buildSensorCard("Humidité du Sol", "${data.humiditeSol.toStringAsFixed(0)} %", Icons.waves, Colors.blue)),
+                          const SizedBox(width: 15),
+                          Expanded(child: _buildSensorCard("Niveau Réservoir", "${data.reservoirEau.toStringAsFixed(0)} L", Icons.opacity, Colors.teal)),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          Expanded(child: _buildSensorCard("Température Air", "${data.temperatureAir.toStringAsFixed(1)} °C", Icons.thermostat, Colors.orange)),
+                          const SizedBox(width: 15),
+                          Expanded(child: _buildSensorCard("Statut Système", data.enLigne ? "Actif" : "Erreur", Icons.wifi, data.enLigne ? Colors.green : Colors.grey)),
+                        ],
+                      ),
+                      const SizedBox(height: 30),
+                      const Text("VUE D'ENSEMBLE DU CHAMP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+                      const SizedBox(height: 15),
+                      Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                        ),
+                        child: const Column(
+                          children: [
+                            ListTile(
+                              leading: Icon(Icons.grass, color: Color(0xFF135800)),
+                              title: Text("Culture active : Rizière Alpha", style: TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text("Saison Principale - Croissance stable"),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF135800),
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => const AgriSmartDetailsScreen()));
+                        },
+                        child: const Text("VOIR L'ANALYSE PATHOLOGIQUE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      )
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        bottomNavigationBar: _buildBottomNavigation(context, selectedIndex: 0),
       ),
-      child: Icon(icon, color: Colors.white, size: 28),
+    );
+  }
+
+  Widget _buildSensorCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
     );
   }
 }
 
+// ==========================================
+// 5. NOUVELLE SAISON / FORMULAIRE
+// ==========================================
+class AgriSmartFormScreen extends StatefulWidget {
+  const AgriSmartFormScreen({super.key});
 
-//creer la fonction magique du menu
+  @override
+  State<AgriSmartFormScreen> createState() => _AgriSmartFormScreenState();
+}
 
+class _AgriSmartFormScreenState extends State<AgriSmartFormScreen> {
+  final TextEditingController _cultureController = TextEditingController();
+  final TextEditingController _varieteController = TextEditingController();
+  final TextEditingController _superficieController = TextEditingController();
 
-
-// Cette fonction ouvre le volet coulissant depuis le bas (Image 11)
-  void _ouvrirMenuNouvelleParcelle(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFFFFFDEE), // Ta couleur crème
-      isScrollControlled: true, // Permet au menu de bien s'adapter à la taille
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)), // Bords arrondis en haut
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // S'adapte à la taille du contenu
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // La petite barre grise tout en haut du menu pour glisser
-              Center(
-                child: Container(
-                  width: 50,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 25),
-
-              // Option 1 : Nouvelle plantation
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[300],
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {
-  Navigator.pop(context); // 1. On ferme d'abord le volet coulissant du bas
-  
-  // 2. On ouvre le nouvel écran de formulaire !
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (context) => const AgriSmartFormScreen()),
-  );
-},
-                child: const Text(
-                  "Nouvelle plantation",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Option 2 : Plantation existante
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[300],
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {
-                Navigator.pop(context); // Ferme le volet du bas
-                
-                // Ouvre la page de diagnostic !
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AgriSmartDetailsScreen()),
-                );
-              },
-                child: const Text(
-                  "Plantation existante",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Bouton Annuler
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "Annuler",
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        );
-      },
-    );
+  @override
+  void dispose() {
+    _cultureController.dispose();
+    _varieteController.dispose();
+    _superficieController.dispose();
+    super.dispose();
   }
 
-  //4 ème  page 
-
-  // ==========================================
-// TROISIÈME ÉCRAN : FORMULAIRE DE SAISON (IMAGE 6)
-// ==========================================
-class AgriSmartFormScreen extends StatelessWidget {
-  const AgriSmartFormScreen({super.key});
+  void _validerEtEnregistrer() {
+    if (_cultureController.text.trim().isEmpty || _varieteController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Veuillez renseigner au moins la Culture et la Variété !"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Nouvelle plantation '${_cultureController.text}' enregistrée avec succès !"),
+          backgroundColor: const Color(0xFF135800),
+        ),
+      );
+      Navigator.pop(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF135800), // Fond vert foncé
+      backgroundColor: const Color(0xFF135800),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context), // Permet de revenir en arrière
+          onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("Nouvelle Saison", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text("Nouvelle plantation", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
+        child: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(top: 15),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFDEE),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bloc formulaire Crème
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFDEE),
-                    borderRadius: BorderRadius.circular(20),
+                const Text("AJOUTER UN NOUVEAU CHAMP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+                const SizedBox(height: 20),
+                
+                const Text("CULTURE ACTIVE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54)),
+                TextField(
+                  controller: _cultureController,
+                  decoration: const InputDecoration(
+                    hintText: 'Ex: Riz, Pomme de terre, Maïs',
+                    hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
+                    border: UnderlineInputBorder(),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildFormFieldTitle("NOM DE LA SAISON"),
-                      const TextField(decoration: InputDecoration(hintText: "Saison principale 2026")),
-                      
-                      const SizedBox(height: 20),
-                      _buildFormFieldTitle("CULTURE"),
-                      const TextField(decoration: InputDecoration(hintText: "Ex: Riz, Tomate...")),
-                      
-                      const SizedBox(height: 20),
-                      _buildFormFieldTitle("DATE DE PLANTATION"),
-                      const TextField(decoration: InputDecoration(hintText: "JJ / MM / AAAA")),
-                      
-                      const SizedBox(height: 20),
-                      _buildFormFieldTitle("DATE DE RÉCOLTE PRÉVUE"),
-                      const TextField(decoration: InputDecoration(hintText: "JJ / MM / AAAA")),
-                    ],
+                ),
+                const SizedBox(height: 24),
+
+                const Text("VARIÉTÉ", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54)),
+                TextField(
+                  controller: _varieteController,
+                  decoration: const InputDecoration(
+                    hintText: 'Ex: Alpha, Variété locale Tsipala',
+                    hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
+                    border: UnderlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                const Text("SUPERFICIE (HA) / EMPLACEMENT", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54)),
+                TextField(
+                  controller: _superficieController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    hintText: 'Ex: 1.2',
+                    hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
+                    border: UnderlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 40),
 
-                // Bouton de validation vert clair
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF66BB46),
+                    backgroundColor: const Color(0xFF135800),
                     minimumSize: const Size(double.infinity, 52),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
-                  onPressed: () {
-                    // Ferme le formulaire et revient à la carte
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Saison enregistrée avec succès !')),
-                    );
-                  },
-                  child: const Text("ENREGISTRER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  onPressed: _validerEtEnregistrer,
+                  child: const Text("ENREGISTRER LA PLANTE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -630,39 +834,10 @@ class AgriSmartFormScreen extends StatelessWidget {
       ),
     );
   }
-
-  // Petit outil pour le style des étiquettes du formulaire
-  Widget _buildFormFieldTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54),
-    );
-  }
 }
 
-
-
-
-// Nouveau design pour tes icônes du bas
-  Widget _buildNavIcon(IconData icon, {bool isSelected = false}) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFF135800) : Colors.transparent, // Fond vert uniquement si sélectionné
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        icon, 
-        color: isSelected ? Colors.white : const Color(0xFF135800).withOpacity(0.6), 
-        size: 28
-      ),
-    );
-  }
-
-
-
 // ==========================================
-// QUATRIÈME ÉCRAN : DIAGNOSTIC & SANTÉ (IMAGE 4 / 7)
+// 6. ÉTAT DE LA PARCELLE & RAPPORT IA
 // ==========================================
 class AgriSmartDetailsScreen extends StatelessWidget {
   const AgriSmartDetailsScreen({super.key});
@@ -670,7 +845,7 @@ class AgriSmartDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF135800), // Fond vert foncé
+      backgroundColor: const Color(0xFF135800),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -678,157 +853,218 @@ class AgriSmartDetailsScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("État de la Parcelle", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text("Rapport de Diagnostic", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // 1. En-tête avec résumé rapide
-            const Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Parcelle : Zone Alpha",
-                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  Icon(Icons.check_circle, color: Color(0xFF66BB46), size: 30), // Icône santé OK
-                ],
-              ),
-            ),
-
-            // 2. Grand panneau Crème pour les détails
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: const Color(0xFFFFFDEE), // Couleur crème
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-                ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        child: ValueListenableBuilder<ResultatAnalyseIA>(
+          valueListenable: diagnosticIANotifier,
+          builder: (context, resultat, child) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("ANALYSE DE PATHOLOGIE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
-                      const SizedBox(height: 15),
-
-                      // Bloc Alerte / Maladie détectée (Simulé comme sur tes rapports)
-                      Container(
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: Colors.orange[100],
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(color: Colors.orange),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 30),
-                            SizedBox(width: 15),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("Attention détectée", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-                                  Text("Symptômes légers de mildiou sur les feuilles inférieures.", style: TextStyle(fontSize: 12, color: Colors.black)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 25),
-
-                      // Section Recommandations
-                      const Text("ACTIONS RECOMMANDÉES", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
-                      const SizedBox(height: 10),
-                      _buildActionItem("1. Réduire l'irrigation en soirée pour limiter l'humidité."),
-                      _buildActionItem("2. Appliquer un traitement biologique préventif."),
-                      _buildActionItem("3. Inspecter la zone Sud-Est d'ici 48 heures."),
-                      
-                      const SizedBox(height: 40),
-
-                      // Bouton pour lancer un nouveau scan IA (TensorFlow Lite)
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF135800),
-                          minimumSize: const Size(double.infinity, 52),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                        ),
-                       onPressed: () {
-                      // Ouvre l'interface de l'appareil photo
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AgriSmartCameraScreen()),
-                      );
-                    },
-                        icon: const Icon(Icons.camera_alt, color: Colors.white),
-                        label: const Text("LANCER UN SCAN PHOTO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      const Text("Parcelle : Zone Alpha", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      Icon(
+                        resultat.estMalade ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                        color: resultat.estMalade ? Colors.orange : Colors.greenAccent,
+                        size: 30,
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ],
+
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFFDEE),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("STATUT DE LA PLANTE (IA)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+                          const SizedBox(height: 10),
+                          Text(
+                            resultat.estMalade ? resultat.maladie : "Plante Saine / Aucun danger",
+                            style: TextStyle(
+                              fontSize: 22, 
+                              fontWeight: FontWeight.bold, 
+                              color: resultat.estMalade ? Colors.red[800] : Colors.green[800],
+                            ),
+                          ),
+                          if (resultat.estMalade) ...[
+                            Text("Indice de confiance : ${resultat.confiance.toStringAsFixed(1)}%", style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.black45)),
+                            const SizedBox(height: 20),
+
+                            _buildReportSectionTitle("CAUSES DE LA PATHOLOGIE"),
+                            _buildReportContentText("Le mildiou est causé par un micro-organisme oomycète (champignon parasitaire) qui se développe très rapidement lors de conditions climatiques humides et chaudes."),
+                            
+                            const SizedBox(height: 15),
+
+                            _buildReportSectionTitle("CONSÉQUENCES SUR LA FERME"),
+                            _buildReportContentText("Flétrissement accéléré des feuilles, apparition de taches brunes et destruction potentielle de la récolte si elle n'est pas traitée d'ici 48 heures. Réduction de 40% du rendement global."),
+                            
+                            const SizedBox(height: 15),
+
+                            _buildReportSectionTitle("MÉTHODES DE PRÉVENTION & REMÈDES"),
+                            _buildActionItem("• Espacer les plantations pour permettre une bonne ventilation."),
+                            _buildActionItem("• Réduire l'irrigation en soirée pour limiter l'excès d'humidité foliaire."),
+                            _buildActionItem("• Appliquer un traitement biologique préventif à base de cuivre."),
+                          ] else ...[
+                            const SizedBox(height: 30),
+                            Center(
+                              child: Column(
+                                children: [
+                                  Icon(Icons.gpp_good, size: 80, color: Colors.green[300]),
+                                  const SizedBox(height: 15),
+                                  const Text(
+                                    "Les analyses TensorFlow Lite indiquent que vos cultures se portent bien.",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 14, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          
+                          const SizedBox(height: 35),
+
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF135800),
+                              minimumSize: const Size(double.infinity, 52),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                            ),
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => const AgriSmartCameraScreen()));
+                            },
+                            icon: const Icon(Icons.camera_alt, color: Colors.white),
+                            label: const Text("LANCER UN NOUVEAU SCAN PHOTO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  // Petit outil pour afficher les lignes d'action
+  Widget _buildReportSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
+      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+    );
+  }
+
+  Widget _buildReportContentText(String content) {
+    return Text(content, style: const TextStyle(fontSize: 14, color: Colors.black54, height: 1.35));
+  }
+
   Widget _buildActionItem(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 14, color: Colors.black, height: 1.4),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500)),
     );
   }
 }
 
-
-
-
-
 // ==========================================
-// CINQUIÈME ÉCRAN : SCANNER PHOTO IA (SIMULATION)
+// 7. SCANNER PHOTO IA
 // ==========================================
-class AgriSmartCameraScreen extends StatelessWidget {
+class AgriSmartCameraScreen extends StatefulWidget {
   const AgriSmartCameraScreen({super.key});
+
+  @override
+  State<AgriSmartCameraScreen> createState() => _AgriSmartCameraScreenState();
+}
+
+class _AgriSmartCameraScreenState extends State<AgriSmartCameraScreen> {
+  bool _enTrainDAnalyser = false;
+
+  void _lancerAnalyseIA() async {
+    setState(() {
+      _enTrainDAnalyser = true;
+    });
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    diagnosticIANotifier.value = ResultatAnalyseIA(
+      maladie: "Mildiou (Phytophthora)",
+      confiance: 87.5,
+      estMalade: true,
+    );
+
+    listeActivitesNotifier.value = [
+      {
+        "date": "Aujourd'hui - À l'instant",
+        "title": "Scan IA : Mildiou détecté",
+        "description": "Feuille analysée avec succès. Alerte Mildiou confirmée à 87%.",
+        "icon": Icons.warning_amber_rounded,
+        "iconColor": Colors.orange,
+      },
+      ...listeActivitesNotifier.value,
+    ];
+
+    if (mounted) {
+      setState(() {
+        _enTrainDAnalyser = false;
+      });
+      
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Analyse TensorFlow Lite terminée !'),
+          backgroundColor: Color(0xFF135800),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Fond noir pour simuler l'appareil photo
+      backgroundColor: Colors.black,
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Fond : On simule le viseur de la caméra avec une image de feuille malade
-            Container(
+            SizedBox(
               width: double.infinity,
               height: double.infinity,
               child: Image.network(
-                'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?q=80&w=1000', // Image de feuille en gros plan
+                'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?q=80&w=1000',
                 fit: BoxFit.cover,
               ),
             ),
 
-            // 2. Overlay de ciblage (Le rectangle de focus de l'IA)
             Center(
               child: Container(
                 width: 280,
                 height: 280,
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFF66BB46), width: 3), // Cadre vert
+                  border: Border.all(
+                    color: _enTrainDAnalyser ? Colors.orange : const Color(0xFF66BB46), 
+                    width: 3,
+                  ),
                   borderRadius: BorderRadius.circular(20),
                 ),
+                child: _enTrainDAnalyser 
+                    ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+                    : const SizedBox(),
               ),
             ),
 
-            // 3. Texte indicatif en haut
             Positioned(
               top: 40,
               left: 20,
@@ -839,15 +1075,16 @@ class AgriSmartCameraScreen extends StatelessWidget {
                   color: Colors.black.withOpacity(0.7),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  "Cadrez la feuille malade dans le rectangle",
+                child: Text(
+                  _enTrainDAnalyser 
+                      ? "Analyse de la pathologie en cours par l'IA..." 
+                      : "Cadrez la feuille malade dans le rectangle",
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
             ),
 
-            // 4. Barre d'action en bas (Bouton retour et bouton de capture)
             Positioned(
               bottom: 40,
               left: 0,
@@ -855,55 +1092,27 @@ class AgriSmartCameraScreen extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Bouton Retour
                   CircleAvatar(
                     backgroundColor: Colors.white24,
                     radius: 25,
                     child: IconButton(
                       icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _enTrainDAnalyser ? null : () => Navigator.pop(context),
                     ),
                   ),
                   
-                  // Gros bouton de capture blanc
-                  // Gros bouton de capture blanc mis à jour
                   GestureDetector(
-                    onTap: () {
-                      // 1. On ajoute dynamiquement la détection IA en haut de la liste
-                      listeActivitesNotifier.value = [
-                        {
-                          "date": "Aujourd'hui - À l'instant",
-                          "title": "Scan IA : Mildiou détecté",
-                          "description": "Feuille de tomate analysée. Alerte Mildiou confirmée à 87%. Traitement requis.",
-                          "icon": Icons.warning_amber_rounded,
-                          "iconColor": Colors.orange,
-                        },
-                        ...listeActivitesNotifier.value, // On garde les anciennes activités en dessous
-                      ];
-
-                      // 2. On ferme l'appareil photo
-                      Navigator.pop(context);
-
-                      // 3. Petite notification de confirmation
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Analyse terminée ! Journal mis à jour.'),
-                          backgroundColor: Color(0xFF135800),
-                        ),
-                      );
-                    },
-                    child: const CircleAvatar(
-                      backgroundColor: Colors.white,
+                    onTap: _enTrainDAnalyser ? null : _lancerAnalyseIA,
+                    child: CircleAvatar(
+                      backgroundColor: _enTrainDAnalyser ? Colors.grey : Colors.white,
                       radius: 35,
-                      child: CircleAvatar(
-                        backgroundColor: Colors.white,
-                        radius: 30,
-                        child: Icon(Icons.camera, color: Colors.black, size: 30),
+                      child: Icon(
+                        _enTrainDAnalyser ? Icons.hourglass_top : Icons.camera, 
+                        color: Colors.black, 
+                        size: 30,
                       ),
                     ),
                   ),
-                  
-                  // Espace vide pour équilibrer le Row
                   const SizedBox(width: 50),
                 ],
               ),
@@ -915,190 +1124,200 @@ class AgriSmartCameraScreen extends StatelessWidget {
   }
 }
 
-
 // ==========================================
-// SIXIÈME ÉCRAN : HISTORIQUE ET ACTIVITÉS DYNAMIQUE
+// 8. HISTORIQUE ET ACTIVITÉS DYNAMIQUE
 // ==========================================
 class AgriSmartActivityScreen extends StatelessWidget {
   const AgriSmartActivityScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF135800),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text("Journal d'Activité", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-      body: SafeArea(
-        child: Container(
-          margin: const EdgeInsets.only(top: 15),
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: Color(0xFFFFFDEE),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-          ),
-          child: ValueListenableBuilder<List<Map<String, dynamic>>>(
-            valueListenable: listeActivitesNotifier,
-            builder: (context, activites, child) {
-              return ListView.builder(
-                padding: const EdgeInsets.all(24.0),
-                itemCount: activites.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return const Padding(
-                      padding: EdgeInsets.only(bottom: 20.0),
-                      child: Text(
-                        "SUIVI DES DERNIÈRES ACTIONS",
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54),
-                      ),
-                    );
-                  }
-                  
-                  final item = activites[index - 1];
-                  return _buildTimelineItem(
-                    date: item["date"],
-                    title: item["title"],
-                    description: item["description"],
-                    icon: item["icon"],
-                    iconColor: item["iconColor"],
-                  );
-                },
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+        );
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF135800),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
               );
             },
           ),
+          title: const Text("Journal d'activité", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTimelineItem({
-    required String date,
-    required String title,
-    required String description,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            CircleAvatar(
-              backgroundColor: iconColor.withOpacity(0.15),
-              radius: 20,
-              child: Icon(icon, color: iconColor, size: 20),
+        body: SafeArea(
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 15),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFFDEE),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
             ),
-            Container(
-              width: 2,
-              height: 60,
-              color: Colors.grey[300],
+            child: ValueListenableBuilder<List<Map<String, dynamic>>>(
+              valueListenable: listeActivitesNotifier,
+              builder: (context, activites, child) {
+                return ListView.builder(
+                  padding: const EdgeInsets.all(24.0),
+                  itemCount: activites.length,
+                  itemBuilder: (context, index) {
+                    final item = activites[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 20.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: (item['iconColor'] as Color).withOpacity(0.1),
+                            radius: 22,
+                            child: Icon(item['icon'] as IconData, color: item['iconColor'] as Color, size: 22),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item['date'] as String,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black38),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  item['title'] as String,
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item['description'] as String,
+                                  style: const TextStyle(fontSize: 13, color: Colors.black54, height: 1.3),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
             ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(date, style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black)),
-              const SizedBox(height: 4),
-              Text(description, style: TextStyle(color: Colors.grey[700], fontSize: 13, height: 1.3)),
-              const SizedBox(height: 20),
-            ],
           ),
         ),
-      ],
+        bottomNavigationBar: _buildBottomNavigation(context, selectedIndex: 2),
+      ),
     );
   }
 }
 
 // ==========================================
-// SEPTIÈME ÉCRAN : PROFIL UTILISATEUR
+// 9. PROFIL UTILISATEUR
 // ==========================================
 class AgriSmartProfileScreen extends StatelessWidget {
   const AgriSmartProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF135800),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+        );
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF135800),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+              );
+            },
+          ),
+          title: const Text("Mon Profil", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
-        title: const Text("Mon Profil", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            const CircleAvatar(
-              radius: 50,
-              backgroundColor: Color(0xFFFFFDEE),
-              child: Icon(Icons.person, size: 60, color: Color(0xFF135800)),
-            ),
-            const SizedBox(height: 15),
-            const Text(
-              "Nom d'utilisateur:id",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            const Text(
-              "ID:etiquette de travaille",
-              style: TextStyle(fontSize: 14, color: Colors.white70),
-            ),
-            const SizedBox(height: 30),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFFDEE),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-                ),
-                child: ListView(
-                  padding: const EdgeInsets.all(24.0),
-                  children: [
-                    const Text("STATISTIQUES DE LA FERME", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
-                    const SizedBox(height: 10),
-                    _buildStatRow("Parcelles totales", "id parecelle entrer"),
-                    _buildStatRow("Alertes résolues", "id analyse ia"),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 15.0),
-                      child: Divider(),
-                    ),
-                    const Text("COMPTE & SÉCURITÉ", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
-                    const SizedBox(height: 10),
-                    Card(
-                      color: Colors.red[50],
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        leading: const Icon(Icons.logout, color: Colors.red),
-                        title: const Text("Se déconnecter", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                        onTap: () {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const AgriSmartLogin()),
-                            (route) => false,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+        body: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              const Center(
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.person, size: 60, color: Color(0xFF135800)),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 15),
+              const Text(
+                "TAFIKINIAINA Nancy Romus",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const Text(
+                "nancy.romus@example.com",
+                style: TextStyle(fontSize: 14, color: Colors.white70),
+              ),
+              const SizedBox(height: 25),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFFDEE),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("STATISTIQUES AGRICOLES", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+                        const SizedBox(height: 15),
+                        _buildStatRow("Parcelles managées", "1 Active"),
+                        _buildStatRow("Scans IA effectués", "${listeActivitesNotifier.value.length}"),
+                        _buildStatRow("Statut du compte", "Premium"),
+                        const SizedBox(height: 30),
+                        const Divider(),
+                        const SizedBox(height: 10),
+                        Card(
+                          color: Colors.red[50],
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            leading: const Icon(Icons.logout, color: Colors.red),
+                            title: const Text("Se déconnecter", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                            onTap: () {
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(builder: (context) => const AgriSmartLogin()),
+                                (route) => false,
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+        bottomNavigationBar: _buildBottomNavigation(context, selectedIndex: 3),
       ),
     );
   }
@@ -1119,3 +1338,146 @@ class AgriSmartProfileScreen extends StatelessWidget {
   }
 }
 
+// ==========================================
+// COMPOSANTS RÉUTILISABLES & MODALES
+// ==========================================
+
+void _ouvrirMenuNouvelleParcelle(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: const Color(0xFFFFFDEE),
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+    builder: (context) {
+      return Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(10))),
+            ),
+            const SizedBox(height: 25),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[300],
+                foregroundColor: Colors.black,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const AgriSmartFormScreen()));
+              },
+              child: const Text("Nouvelle plantation", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[300],
+                foregroundColor: Colors.black,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const AgriSmartDetailsScreen()));
+              },
+              child: const Text("Plantation existante", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Annuler", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildBottomNavigation(BuildContext context, {required int selectedIndex}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    color: const Color(0xFFFFFDEE),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        GestureDetector(
+          onTap: () {
+            if (selectedIndex != 0) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AgriSmartParcelleScreen()),
+              );
+            }
+          },
+          child: _buildNavIcon(Icons.storage, isSelected: selectedIndex == 0),
+        ),
+        GestureDetector(
+          onTap: () {
+            if (selectedIndex != 1) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
+              );
+            }
+          },
+          child: _buildNavIcon(Icons.cloud_queue, isSelected: selectedIndex == 1),
+        ),
+        GestureDetector(
+          onTap: () {
+            if (selectedIndex != 2) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AgriSmartActivityScreen()),
+              );
+            }
+          },
+          child: _buildNavIcon(Icons.edit_note, isSelected: selectedIndex == 2),
+        ),
+        GestureDetector(
+          onTap: () {
+            if (selectedIndex != 3) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AgriSmartProfileScreen()),
+              );
+            }
+          },
+          child: _buildNavIcon(Icons.person_pin, isSelected: selectedIndex == 3),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildNavIcon(IconData icon, {bool isSelected = false}) {
+  return Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: isSelected ? const Color(0xFF135800) : Colors.transparent,
+      shape: BoxShape.circle,
+    ),
+    child: Icon(
+      icon,
+      color: isSelected ? Colors.white : const Color(0xFF135800).withOpacity(0.6),
+      size: 28,
+    ),
+  );
+}
+
+Stream<SensorData> obtenirFluxCapteursESP32() {
+  return Stream.periodic(const Duration(seconds: 2), (count) {
+    return SensorData(
+      humiditeSol: 45.0 + (count % 5),
+      reservoirEau: 80.0 - (count * 0.1),
+      temperatureAir: 25.0 + (count % 2 == 0 ? 0.5 : -0.2),
+      enLigne: true,
+    );
+  });
+}
