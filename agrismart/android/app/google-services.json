@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "654317885156",
+    "project_id": "agriguard-fd327",
+    "storage_bucket": "agriguard-fd327.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:654317885156:android:1c8a1085ece3d80267fef1",
+        "android_client_info": {
+          "package_name": "com.example.agrismart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGB-UQV5d-BeIHqarvQeDZzBZfuY9V-Xs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
