@@ -5,6 +5,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'services/auth_service.dart';
+import 'screens/register_screen.dart';
 
 // ==========================================
 // CONFIGURATIONS ET NOTIFIERS GLOBAUX
@@ -158,21 +160,43 @@ class _AgriSmartLoginState extends State<AgriSmartLogin> {
     super.dispose();
   }
 
-  void _tenterConnexion() {
-    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Veuillez remplir l'email et le mot de passe !"),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const AgriSmartMapScreen()),
-      );
-    }
+  Future<void> _tenterConnexion() async {
+  if (_emailController.text.trim().isEmpty ||
+      _passwordController.text.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Veuillez remplir l'email et le mot de passe !"),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
   }
+
+  try {
+    await AuthService().signIn(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AgriSmartMapScreen(),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(e.toString().replaceFirst("Exception: ", "")),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -305,7 +329,14 @@ class _AgriSmartLoginState extends State<AgriSmartLogin> {
                   children: [
                     const Text("Vous n'avez pas de compte ? ", style: TextStyle(color: Colors.white60, fontSize: 12)),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const RegisterScreen(),
+                          ),
+                        );
+                      },
                       child: const Text(
                         "Créer-en un gratuitement !",
                         style: TextStyle(color: Color(0xFF66BB46), fontWeight: FontWeight.bold, fontSize: 12),
